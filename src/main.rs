@@ -14,7 +14,48 @@ struct Tcod {
     con: Offscreen,
 }
 
-fn handle_keys(tcod: &mut Tcod, player_x: &mut i32, player_y: &mut i32) -> bool {
+// Generic Entity
+/// contains entity metadata
+struct Entity {
+    x: i32,
+    y: i32,
+    char: char,
+    color: Color,
+}
+
+/// contains the code for entity functions
+impl Entity {
+    pub fn new(
+        x: i32, 
+        y: i32, 
+        char: char, 
+        color: Color
+    ) -> Self {
+        Entity { x, y, char, color }
+    }
+
+    //// move by the given input amount
+    pub fn move_by(
+        &mut self, 
+        dx: i32, 
+        dy: i32
+    ) {
+        self.x += dx;
+        self.y += dy;
+    }
+
+    //// set the color and draw the ascii character
+    pub fn draw(
+        &self, 
+        con: &mut dyn Console
+    ) {
+        con.set_default_foreground(self.color);
+        con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
+    }
+}
+
+
+fn handle_keys(tcod: &mut Tcod, player: &mut Entity) -> bool {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
 
@@ -32,10 +73,10 @@ fn handle_keys(tcod: &mut Tcod, player_x: &mut i32, player_y: &mut i32) -> bool 
         Key { code: Escape, .. } => return true, // exit game
 
         // movement keys
-        Key { code: Up, .. } => *player_y -= 1,
-        Key { code: Down, .. } => *player_y += 1,
-        Key { code: Left, .. } => *player_x -= 1,
-        Key { code: Right, .. } => *player_x += 1,
+        Key { code: Up, .. } => player.move_by(0, -1),
+        Key { code: Down, .. } => player.move_by(0, 1),
+        Key { code: Left, .. } => player.move_by(-1, 0),
+        Key { code: Right, .. } => player.move_by(1, 0),
 
         _ => {}
     }
@@ -55,18 +96,38 @@ fn main() {
 
     let con = Offscreen::new(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    let mut tcod = Tcod { root, con };
+    let mut tcod = Tcod { 
+        root, 
+        con,
+    };
 
-    let mut player_x = SCREEN_WIDTH / 2;
-    let mut player_y = SCREEN_HEIGHT / 2;
+    let player = Entity::new(
+        SCREEN_WIDTH / 2, 
+        SCREEN_HEIGHT / 2, 
+        '@', 
+        WHITE
+    );
+
+    let npc = Entity::new(
+        SCREEN_WIDTH / 2 - 5,
+        SCREEN_HEIGHT / 2,
+        '@',
+        YELLOW
+    );
+
+    let mut entities = [
+        player,
+        npc
+    ];
 
     while !tcod.root.window_closed() {
-        tcod.con.set_default_foreground(WHITE);
+        // clears the previous frame
         tcod.con.clear();
-        tcod.con
-            .put_char(player_x, player_y, '@', BackgroundFlag::None);
-        tcod.root.flush();
-        
+
+        for entity in &entities {
+            entity.draw(&mut tcod.con);
+        }
+                
         blit(
             &tcod.con,
             (0,0), 
@@ -77,8 +138,11 @@ fn main() {
             1.0
         );
 
+        tcod.root.flush();
+
         // handle keys and exit game if needed
-        let exit = handle_keys(&mut tcod, &mut player_x, &mut player_y);
+        let player = &mut entities[0];
+        let exit = handle_keys(&mut tcod, player);
         if exit {
             break;
         }
