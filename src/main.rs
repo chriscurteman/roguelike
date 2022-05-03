@@ -1,3 +1,5 @@
+// RogueLike
+
 use std::cmp;
 use tcod::colors::*;
 use tcod::console::*;
