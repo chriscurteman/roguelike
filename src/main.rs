@@ -253,11 +253,21 @@ fn handle_keys(tcod: &mut Tcod, game: &Game, player: &mut Object) -> bool {
         }
         Key { code: Escape, .. } => return true, // exit game
 
-        // movement keys
+        // 4-directional movement keys
         Key { code: Up, .. } => player.move_by(0, -1, game),
         Key { code: Down, .. } => player.move_by(0, 1, game),
         Key { code: Left, .. } => player.move_by(-1, 0, game),
         Key { code: Right, .. } => player.move_by(1, 0, game),
+
+        // 8-directional movement keys
+        Key { code: NumPad1, .. } => player.move_by(-1, 1, game),
+        Key { code: NumPad2, .. } => player.move_by(0, 1, game),
+        Key { code: NumPad3, .. } => player.move_by(1, 1, game),
+        Key { code: NumPad4, .. } => player.move_by(-1, 0, game),
+        Key { code: NumPad6, .. } => player.move_by(1, 0, game),
+        Key { code: NumPad7, .. } => player.move_by(-1, -1, game),
+        Key { code: NumPad8, .. } => player.move_by(0, -1, game),
+        Key { code: NumPad9, .. } => player.move_by(1, -1, game),
 
         _ => {}
     }
