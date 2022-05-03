@@ -4,28 +4,39 @@ use std::cmp;
 use tcod::colors::*;
 use tcod::console::*;
 use rand::Rng;
+use tcod::map::{FovAlgorithm, Map as FovMap};
 
-// parameters for dungeon generator
+// fov parameters
+const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic;
+const FOV_LIGHT_WALLS: bool = true;
+const TORCH_RADIUS: i32 = 10;
+
+// dungeon generator parameters
 const ROOM_MAX_SIZE: i32 = 10;
 const ROOM_MIN_SIZE: i32 = 6;
 const MAX_ROOMS: i32 = 30;
 
-// actual size of the window
+// window size parameters
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
 
-// size of the map
+// map size parameters
 const MAP_WIDTH: i32 = 80;
 const MAP_HEIGHT: i32 = 45;
 
-const LIMIT_FPS: i32 = 20; // 20 frames-per-second maximum
+// 20 frames-per-second maximum
+const LIMIT_FPS: i32 = 20; 
 
+// tile color parameter data
 const COLOR_DARK_WALL: Color = Color { r: 0, g: 0, b: 100 };
 const COLOR_DARK_GROUND: Color = Color { r: 50, g: 50, b: 150 };
+const COLOR_LIGHT_WALL: Color = Color { r: 130, g: 110, b: 50 };
+const COLOR_LIGHT_GROUND: Color = Color { r: 200, g: 180, b: 200 };
 
 struct Tcod {
     root: Root,
     con: Offscreen,
+    fov: FovMap,
 }
 
 type Map = Vec<Vec<Tile>>;
@@ -204,24 +215,41 @@ fn make_map(player: &mut Object) -> Map {
     map
 }
 
-fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object]) {
+fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object], fov_recompute: bool) {
+    if fov_recompute {
+        let player = &objects[0];
+        tcod.fov.compute_fov(
+            player.x, 
+            player.y, 
+            TORCH_RADIUS, 
+            FOV_LIGHT_WALLS, 
+            FOV_ALGO
+        );
+    }
+    
     // go through all tiles, and set their background color
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
+            let visible = tcod.fov.is_in_fov(x, y);
             let wall = game.map[x as usize][y as usize].block_sight;
-            if wall {
-                tcod.con
-                    .set_char_background(x, y, COLOR_DARK_WALL, BackgroundFlag::Set);
-            } else {
-                tcod.con
-                    .set_char_background(x, y, COLOR_DARK_GROUND, BackgroundFlag::Set);
-            }
+            let color = match (visible, wall) {
+                // outside of field of view:
+                (false, true) => COLOR_DARK_WALL,
+                (false, false) => COLOR_DARK_GROUND,
+                // inside fov:
+                (true, true) => COLOR_LIGHT_WALL,
+                (true, false) => COLOR_LIGHT_GROUND,
+            };
+            tcod.con
+                .set_char_background(x, y, color, BackgroundFlag::Set);
         }
     }
 
     // draw all objects in the list
     for object in objects {
-        object.draw(&mut tcod.con);
+        if tcod.fov.is_in_fov(object.x, object.y) {
+            object.draw(&mut tcod.con);
+        }
     }
 
     // blit the contents of "con" to the root console
@@ -285,9 +313,11 @@ fn main() {
         .title("RogueLike")
         .init();
 
-    let con = Offscreen::new(MAP_WIDTH, MAP_HEIGHT);
-
-    let mut tcod = Tcod { root, con };
+    let mut tcod = Tcod { 
+        root, 
+        con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT), 
+        fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
+    };
 
     // create object representing the player
     // place the player inside the first room
@@ -299,17 +329,33 @@ fn main() {
     // the list of objects with those two
     let mut objects = [player];
 
+    // generate map (at this point it's not drawn to the screen)
     let game = Game {
-        // generate map (at this point it's not drawn to the screen)
         map: make_map(&mut objects[0]),
     };
 
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            tcod.fov.set(
+                x,
+                y,
+                !game.map[x as usize][y as usize].block_sight,
+                !game.map[x as usize][y as usize].blocked,
+            )
+        }
+    }
+
+    // force FOV to recompute first time through the game loop
+    let mut previous_player_position = (-1, -1);
+
+    // main game loop
     while !tcod.root.window_closed() {
         // clear the screen of the previous frame
         tcod.con.clear();
 
         // render the screen
-        render_all(&mut tcod, &game, &objects);
+        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
+        render_all(&mut tcod, &game, &objects, fov_recompute);
 
         tcod.root.flush();
 
