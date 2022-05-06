@@ -1,5 +1,9 @@
 // RogueLike
 
+const MAX_ROOM_MONSTERS: i32 = 3;
+const MIN_ROOM_MONSTERS: i32 = 0;
+
+use core::num;
 use std::cmp;
 use tcod::colors::*;
 use tcod::console::*;
@@ -132,6 +136,25 @@ impl Object {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
+}
+
+// FUNCTIONS
+fn place_objects(room: Rect, objects: &mut Vec<Object>) {
+    // choose a random number of monsters
+    let num_of_monsters = rand::thread_rng().gen_range(MIN_ROOM_MONSTERS, MAX_ROOM_MONSTERS + 1);
+
+    for _ in 0..num_of_monsters {
+        let x = rand::thread_rng().gen_range(room.x1 + 1, room.x2);
+        let y = rand::thread_rng().gen_range(room.y1 + 1, room.y2);
+    }
+
+    let mut monster = if rand::random::<f32>() < 0.8 {
+        Object::new(x, y, 'o', DESATURATED_GREEN)
+    } else {
+        Object::new(x, y, 't', DESATURATED_ORANGE)
+    };
+
+    objects.push(monster)
 }
 
 fn create_room(room: Rect, map: &mut Map) {
