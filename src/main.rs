@@ -1,5 +1,3 @@
-// This file is generated automatically. Do not edit it directly.
-// See the Contributing section in README on how to make changes to it.
 use std::cmp;
 
 use rand::Rng;
@@ -149,6 +147,16 @@ struct Object {
 }
 
 impl Object {
+    /**
+     * new
+     * * constructor for a new object instance
+     * @param x The X coord to place the object
+     * @param y The Y coord to place the object
+     * @param char What ASCII character to use
+     * @param name The name of the object
+     * @param color What color the tile should be
+     * @param blocks Boolean value for if this object should block movement
+     */
     pub fn new(x: i32, y: i32, char: char, name: &str, color: Color, blocks: bool) -> Self {
         Object {
             x: x,
@@ -177,9 +185,40 @@ impl Object {
         self.x = x;
         self.y = y;
     }
+
+    // * returns the distance to another object
+    pub fn distance_to(&self, other: &Object) -> f32 {
+        let dx = other.x - self.x;
+        let dy = other.y - self.y;
+        ((dx.pow(2) + dy.pow(2)) as f32).sqrt()
+    }
 }
 
-/// move by the given amount, if the destination is not blocked
+fn ai_take_turn(monster_id: usize, tcod: &Tcod, game: &Game, objects: &mut [Object]) {
+    // a basic monster takes its turn
+    // if you can see it, it can see you
+    // TODO: Implement different sight ranges
+    let (monster_x, monster_y) = objects[monster_id].pos();
+    if tcod.fov.is_in_fov(monster_x, monster_y) {
+        // * move towards the player if 2 or more units away
+        if objects[monster_id].distance_to(&objects[PLAYER]) >= 2.0 {
+            let (player_x, player_y) = objects[PLAYER].pos();
+            move_towards(monster_id, player_x, player_y, &game.map, objects);
+        
+        // * else we are close enough to attack
+        } else if objects[PLAYER].fighter.map_or(false, |f| f.hp > 0) {
+            let monster = &objects[monster_id];
+            println!("The attack of the {} bounces off your armor!", monster.name);
+        }
+    }
+}
+
+/**
+ * move_by
+ * * move by the given amount, if the destination is not blocked
+ * @param id parameter
+ * @param dx parameterW
+ */
 fn move_by(id: usize, dx: i32, dy: i32, map: &Map, objects: &mut [Object]) {
     let (x, y) = objects[id].pos();
     if !is_blocked(x + dx, y + dy, map, objects) {
@@ -298,7 +337,7 @@ fn place_objects(room: Rect, map: &Map, objects: &mut Vec<Object>) {
             let mut monster = if rand::random::<f32>() < 0.8 {
                 // 80% chance of getting an orc
                 // create an orc
-                let mut orc = Object::new(x, y, 'o', "orc", DESATURATED_GREEN, true);
+                let mut orc = Object::new(x, y, 'O', "orc", DESATURATED_GREEN, true);
                 orc.fighter = Some(Fighter {
                     max_hp: 10,
                     hp: 10,
@@ -324,6 +363,21 @@ fn place_objects(room: Rect, map: &Map, objects: &mut Vec<Object>) {
             objects.push(monster);
         }
     }
+}
+
+fn move_towards(id: usize, target_x: i32, target_y: i32, map: &Map, objects: &mut [Object]) {
+    // vector from this object to the target
+    let dx = target_x - objects[id].x;
+    let dy = target_y - objects[id].y;
+    let distance = ((dx.pow(2)+ dy.pow(2)) as f32).sqrt();
+
+    // * normalize the legnth, round, convert to int
+    // * movement will then be restricted to the map grid
+    let dx = (dx as f32 / distance).round() as i32;
+    let dy = (dy as f32 / distance).round() as i32;
+
+    // * move the object by the normalized vector
+    move_by(id, dx, dy, map, objects);
 }
 
 fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
@@ -558,16 +612,16 @@ fn main() {
 
         // let monsters take their turn
         if objects[PLAYER].alive && player_action != PlayerAction::DidntTakeTurn {
-            for object in &objects {
-                // only if object is not player
-                if (object as *const _) != (&objects[PLAYER] as *const _) {
-                    println!("The {} growls!", object.name);
+            if objects[PLAYER].alive && player_action != PlayerAction::DidntTakeTurn {
+                for id in 0..objects.len() {
+                    if objects[id].ai.is_some() {
+                        ai_take_turn(id, &tcod, &game, &mut objects);
+                    }
                 }
             }
         }
     }
 }
 
-
-
-// Refactor TookTurn functions to take a number and remake actions to take a number of turns - ie opening a chest might take two turns, which would allow orcs to attack the player twice
+// ? Refactor TookTurn functions to take a number and remake actions to take a number of turns - ie opening a chest might take two turns, which would allow orcs to attack the player twice
+// ? Refactor place_object to take in parameters to control the RNG percent and types of monsters to createW
