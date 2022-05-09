@@ -192,6 +192,42 @@ impl Object {
         let dy = other.y - self.y;
         ((dx.pow(2) + dy.pow(2)) as f32).sqrt()
     }
+
+    // * simple attack
+    pub fn attack(&mut self, target: &mut Object) {
+        let damage = self.fighter.map_or(0, |f| f.power) - target.fighter.map_or(0, |f| f.defense);
+        if damage > 0 {
+            println!("{} attacks {} for {} hit points.", self.name, target.name, damage);
+            target.take_damage(damage);
+        } else {
+            print!("{} attacks {} but it has no effect!", self.name, target.name);
+        }
+    }
+    
+    // * simple damage applier
+    pub fn take_damage(&mut self, damage: i32) {
+        // apply damage if possible
+        if let Some(fighter) = self.fighter.as_mut() {
+            if damage > 0 {
+                fighter.hp -= damage;
+            }
+        }
+    }
+}
+
+/**
+ * mut_two
+ * * mutable borrow two separate elements from the given slice
+ */
+fn mut_two<T>(first_index: usize, second_index: usize, items: &mut [T]) -> (&mut T, &mut T) {
+    assert!(first_index != second_index);
+    let split_at_index = cmp::max(first_index, second_index);
+    let (first_slice, second_slice) = items.split_at_mut(split_at_index);
+    if first_index < second_index {
+        (&mut first_slice[first_index], &mut second_slice[0])
+    } else {
+        (&mut second_slice[0], &mut first_slice[second_index])
+    }
 }
 
 fn ai_take_turn(monster_id: usize, tcod: &Tcod, game: &Game, objects: &mut [Object]) {
@@ -207,8 +243,8 @@ fn ai_take_turn(monster_id: usize, tcod: &Tcod, game: &Game, objects: &mut [Obje
         
         // * else we are close enough to attack
         } else if objects[PLAYER].fighter.map_or(false, |f| f.hp > 0) {
-            let monster = &objects[monster_id];
-            println!("The attack of the {} bounces off your armor!", monster.name);
+            let (monster, player) = mut_two(monster_id, PLAYER, obejcts);
+            monster.attack(player);
         }
     }
 }
@@ -432,6 +468,18 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         1.0,
         1.0,
     );
+
+    // show player stats (GUI)
+    tcod.root.set_default_foreground(WHITE);
+    if let Some(fighter) = objects[PLAYER].fighter {
+        tcod.root.print_ex(
+            1,
+            SCREEN_HEIGHT - 2,
+            BackgroundFlag::None,
+            TextAlignment::Left,
+            format!("HP: {}/{}", fighter.hp, fighter.max_hp),
+        );
+    }
 }
 
 fn player_move_or_attack(dx: i32, dy: i32, game: &Game, objects: &mut [Object]) {
@@ -551,7 +599,7 @@ fn main() {
         .font("arial10x10.png", FontLayout::Tcod)
         .font_type(FontType::Greyscale)
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
-        .title("Rust/libtcod tutorial")
+        .title("Roguelike")
         .init();
 
     let mut tcod = Tcod {
@@ -625,3 +673,4 @@ fn main() {
 
 // ? Refactor TookTurn functions to take a number and remake actions to take a number of turns - ie opening a chest might take two turns, which would allow orcs to attack the player twice
 // ? Refactor place_object to take in parameters to control the RNG percent and types of monsters to createW
+// ? Damange over time system
